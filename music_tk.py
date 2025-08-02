@@ -3,6 +3,13 @@ from pydub import AudioSegment
 import tkinter as tk
 import simpleaudio as sa
 import threading
+import socket
+
+# UDP送信先（Raspberry Pi の IP とポート番号に変更）
+UDP_IP = "192.168.0.202"  # ← あなたのRaspberry PiのIPアドレスに置き換えてください
+UDP_PORT = 5005
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # 音域
 BASS_RANGE = (20, 250)
@@ -13,6 +20,13 @@ TREBLE_RANGE = (2000, 8000)
 bass_gain = 1.0
 mid_gain = 1.0
 treble_gain = 1.2
+
+def send_udp_rgb(r, g, b):
+    message = f"{r:.3f},{g:.3f},{b:.3f}"
+    try:
+        sock.sendto(message.encode(), (UDP_IP, UDP_PORT))
+    except Exception as e:
+        print("UDP送信エラー:", e)
 
 def calculate_fft(chunk, rate):
     window = np.hamming(len(chunk))
@@ -71,6 +85,8 @@ class VUMeterApp:
         self.draw_bar("BASS", bass)
         self.draw_bar("MID", mid)
         self.draw_bar("TREBLE", treble)
+        # ★ 追加：UDP送信
+        send_udp_rgb(treble, mid, bass)
 
         self.master.after(50, self.update_meter)
 
@@ -91,9 +107,39 @@ def play_audio_pydub(audio_segment):
     )
     play_obj.wait_done()
 
+# def main():
+#     # ファイル読み込み
+#     audio = AudioSegment.from_file("石川さゆり 天城越え(新録音) 高音質ステレオ_1.mp3").set_channels(1).set_frame_rate(44100)
+#     sample_rate = audio.frame_rate
+#     samples = np.array(audio.get_array_of_samples()).astype(np.float32)
+#     samples = samples / np.max(np.abs(samples))  # 正規化
+
+#     chunk_size = int(sample_rate * 0.05)
+
+#     # 音声再生（非同期）
+#     threading.Thread(target=play_audio_pydub, args=(audio,), daemon=True).start()
+
+#     # Tkinter GUI
+#     root = tk.Tk()
+#     root.title("VU Meter")
+#     app = VUMeterApp(root, samples, sample_rate, chunk_size)
+#     root.mainloop()
+
 def main():
-    # ファイル読み込み
-    audio = AudioSegment.from_file("絶体絶命_2023_07_08_01_06_03.mp3").set_channels(1).set_frame_rate(44100)
+    from tkinter import filedialog
+
+    # ファイル選択ダイアログ
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="音楽ファイルを選択してください",
+        filetypes=[("音声ファイル", "*.mp3 *.wav *.ogg *.flac"), ("すべてのファイル", "*.*")]
+    )
+    if not file_path:
+        print("ファイルが選択されませんでした。終了します。")
+        return
+
+    audio = AudioSegment.from_file(file_path).set_channels(1).set_frame_rate(44100)
     sample_rate = audio.frame_rate
     samples = np.array(audio.get_array_of_samples()).astype(np.float32)
     samples = samples / np.max(np.abs(samples))  # 正規化
@@ -103,7 +149,7 @@ def main():
     # 音声再生（非同期）
     threading.Thread(target=play_audio_pydub, args=(audio,), daemon=True).start()
 
-    # Tkinter GUI
+    # GUI起動
     root = tk.Tk()
     root.title("VU Meter")
     app = VUMeterApp(root, samples, sample_rate, chunk_size)
