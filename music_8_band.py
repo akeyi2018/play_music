@@ -11,18 +11,18 @@ UDP_IP = "192.168.0.202"
 UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# 音域とゲイン
-BASS_RANGE = (20, 250)
-MID_RANGE = (250, 2000)
-TREBLE_RANGE = (2000, 8000)
+# 音域とゲイン（分割済み）
+BASS_RANGES = [(20, 100), (100, 180), (180, 250)]
+MID_RANGES = [(250, 600), (600, 1200), (1200, 2000)]
+TREBLE_RANGES = [(2000, 4000), (4000, 8000)]
+
 bass_gain = 1.0
 mid_gain = 1.0
 treble_gain = 1.2
 
-def send_udp_rgb(r, g, b):
-    message = f"{r:.3f},{g:.3f},{b:.3f}"
+def send_udp_rgb_message(msg):
     try:
-        sock.sendto(message.encode(), (UDP_IP, UDP_PORT))
+        sock.sendto(msg.encode(), (UDP_IP, UDP_PORT))
     except Exception as e:
         print("UDP送信エラー:", e)
 
@@ -42,6 +42,13 @@ def normalize(val):
     val = np.nan_to_num(val)
     scaled = np.log10(val + 1e-3)
     return max(0.0, min(scaled / 2, 1.0))
+
+def multi_band_energies(freqs, amp, bands, gain=1.0):
+    results = []
+    for band in bands:
+        energy = band_energy(freqs, amp, band) * gain
+        results.append(normalize(energy))
+    return results
 
 class VUMeterApp:
     def __init__(self, master):
@@ -90,19 +97,16 @@ class VUMeterApp:
         if not path:
             return
 
-        # 停止処理
-        # ★ 再生中なら停止してロック解除
+        # 再生中なら停止して再初期化
         if self.playing:
             self.playing = False
             pygame.mixer.music.stop()
-            pygame.mixer.quit()      # ← ロック解除
-            pygame.mixer.init()      # ← 再初期化
+            pygame.mixer.quit()
+            pygame.mixer.init()
             self.play_button.config(text="再生")
 
-        # 🎵 PygameでMP3を直接読み込む
         pygame.mixer.music.load(path)
 
-        # 音声読み込みとnumpy変換
         self.audio_segment = AudioSegment.from_file(path).set_channels(1).set_frame_rate(self.rate)
         self.samples = np.array(self.audio_segment.get_array_of_samples()).astype(np.float32)
         self.samples = self.samples / np.max(np.abs(self.samples))
@@ -117,9 +121,8 @@ class VUMeterApp:
 
         self.index = 0
         self.playing = True
-        
-        pygame.mixer.music.play()
 
+        pygame.mixer.music.play()
         self.play_button.config(text="再生中")
         self.update_meter()
 
@@ -133,15 +136,20 @@ class VUMeterApp:
         self.index += self.chunk_size
 
         freqs, amp = calculate_fft(chunk, self.rate)
-        bass = normalize(band_energy(freqs, amp, BASS_RANGE) * bass_gain)
-        mid = normalize(band_energy(freqs, amp, MID_RANGE) * mid_gain)
-        treble = normalize(band_energy(freqs, amp, TREBLE_RANGE) * treble_gain)
 
-        self.draw_bar("BASS", bass)
-        self.draw_bar("MID", mid)
-        self.draw_bar("TREBLE", treble)
+        bass_levels = multi_band_energies(freqs, amp, BASS_RANGES, bass_gain)
+        mid_levels = multi_band_energies(freqs, amp, MID_RANGES, mid_gain)
+        treble_levels = multi_band_energies(freqs, amp, TREBLE_RANGES, treble_gain)
 
-        send_udp_rgb(treble, mid, bass)
+        # 中心バーは平均で表示
+        self.draw_bar("BASS", sum(bass_levels) / len(bass_levels))
+        self.draw_bar("MID", sum(mid_levels) / len(mid_levels))
+        self.draw_bar("TREBLE", sum(treble_levels) / len(treble_levels))
+
+        # UDP送信（8バンド値を送信）
+        all_levels = bass_levels + mid_levels + treble_levels
+        message = ",".join(f"{v:.3f}" for v in all_levels)
+        send_udp_rgb_message(message)
 
         self.master.after(50, self.update_meter)
 
