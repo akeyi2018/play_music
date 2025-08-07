@@ -53,49 +53,77 @@ class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("VU Meter")
-        self.master.geometry("700x450")
+        self.master.geometry("800x500")
 
         self.samples = None
         self.rate = 44100
         self.chunk_size = int(self.rate * 0.05)
         self.index = 0
         self.playing = False
+        self.paused = False
         self.audio_segment = None
 
-        self.canvas = tk.Canvas(master, width=680, height=250, bg='black')
-        self.canvas.pack(pady=10)
+        self.create_widgets()
+        pygame.mixer.init()
 
-        # バーとラベルの配置
+    def create_widgets(self):
+        # コントロールフレーム
+        control_frame = tk.Frame(self.master)
+        control_frame.grid(row=0, column=0, pady=10)
+
+        self.load_button = tk.Button(control_frame, text="ファイルをロード", command=self.load_file)
+        self.load_button.grid(row=0, column=0, padx=5)
+
+        self.play_pause_button = tk.Button(control_frame, text="再生", state=tk.DISABLED, command=self.toggle_play_pause)
+        self.play_pause_button.grid(row=0, column=1, padx=5)
+
+        self.stop_button = tk.Button(control_frame, text="停止", command=self.stop_play)
+        self.stop_button.grid(row=0, column=2, padx=5)
+
+        # VUメーターフレーム
+        self.canvas = tk.Canvas(self.master, width=760, height=250, bg='black')
+        self.canvas.grid(row=1, column=0, padx=20)
+
         self.bars = {}
         self.labels = {}
-
         band_names = ["BASS1", "BASS2", "BASS3", "MID1", "MID2", "MID3", "TREBLE1", "TREBLE2"]
         colors = ["blue", "blue", "red", "red", "yellow", "yellow", "green", "green"]
 
         for i, (name, color) in enumerate(zip(band_names, colors)):
-            x = 40 + i * 80
+            x = 40 + i * 85
             self.bars[name] = self.canvas.create_rectangle(x, 230, x + 40, 230, fill=color)
             self.labels[name] = self.canvas.create_text(x + 20, 240, text=name, fill='white')
 
-        self.load_button = tk.Button(master, text="ファイルをロード", command=self.load_file)
-        self.load_button.pack(pady=5)
+        # ファイル名表示
+        self.filename_label = tk.Label(self.master, text="ファイル未選択", fg="gray")
+        self.filename_label.grid(row=2, column=0, pady=5)
 
-        self.filename_label = tk.Label(master, text="ファイル未選択", fg="gray")
-        self.filename_label.pack(pady=2)
+    def toggle_play_pause(self):
+        if self.samples is None:
+            return
 
-        self.play_button = tk.Button(master, text="再生", state=tk.DISABLED, command=self.start_playback)
-        self.play_button.pack(pady=5)
-
-        self.stop_button = tk.Button(master, text="停止", command=self.stop_play).pack(pady=5)
-
-        pygame.mixer.init()
+        if not self.playing:
+            self.playing = True
+            self.paused = False
+            pygame.mixer.music.play(start=self.index / self.rate)
+            self.play_pause_button.config(text="一時停止")
+            self.update_meter()
+        elif not self.paused:
+            pygame.mixer.music.pause()
+            self.paused = True
+            self.play_pause_button.config(text="再開")
+        else:
+            pygame.mixer.music.unpause()
+            self.paused = False
+            self.play_pause_button.config(text="一時停止")
 
     def stop_play(self):
-        if self.playing:
+        if self.playing or self.paused:
             self.playing = False
+            self.paused = False
             pygame.mixer.music.stop()
-            # pygame.mixer.quit()
-            # pygame.mixer.init()
+            self.play_pause_button.config(text="再生")
+            self.index = 0
 
     def load_file(self):
         path = filedialog.askopenfilename(
@@ -110,32 +138,23 @@ class VUMeterApp:
             pygame.mixer.music.stop()
             pygame.mixer.quit()
             pygame.mixer.init()
-            self.play_button.config(text="再生")
+            self.play_pause_button.config(text="再生")
 
         pygame.mixer.music.load(path)
-
         self.audio_segment = AudioSegment.from_file(path).set_channels(1).set_frame_rate(self.rate)
         self.samples = np.array(self.audio_segment.get_array_of_samples()).astype(np.float32)
         self.samples = self.samples / np.max(np.abs(self.samples))
 
         self.filename_label.config(text=f"選択ファイル: {path.split('/')[-1]}", fg="black")
-        self.play_button.config(state=tk.NORMAL)
+        self.play_pause_button.config(state=tk.NORMAL)
         self.index = 0
-
-    def start_playback(self):
-        if self.samples is None:
-            return
-
-        self.index = 0
-        self.playing = True
-
-        pygame.mixer.music.play()
-        self.play_button.config(text="再生中")
-        self.update_meter()
 
     def update_meter(self):
-        if not self.playing or self.index + self.chunk_size >= len(self.samples):
-            self.play_button.config(text="再生")
+        if not self.playing or self.paused:
+            return
+
+        if self.index + self.chunk_size >= len(self.samples) or not pygame.mixer.music.get_busy():
+            self.play_pause_button.config(text="再生")
             self.playing = False
             return
 
@@ -153,7 +172,6 @@ class VUMeterApp:
         for name, val in zip(self.bars.keys(), all_levels):
             self.draw_bar(name, val)
 
-        # UDP送信
         message = ",".join(f"{v:.3f}" for v in all_levels)
         send_udp_rgb_message(message)
 
