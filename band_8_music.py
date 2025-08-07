@@ -53,7 +53,7 @@ class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("VU Meter")
-        self.master.geometry("700x400")
+        self.master.geometry("700x450")
 
         self.samples = None
         self.rate = 44100
@@ -86,7 +86,16 @@ class VUMeterApp:
         self.play_button = tk.Button(master, text="再生", state=tk.DISABLED, command=self.start_playback)
         self.play_button.pack(pady=5)
 
+        self.stop_button = tk.Button(master, text="停止", command=self.stop_play).pack(pady=5)
+
         pygame.mixer.init()
+
+    def stop_play(self):
+        if self.playing:
+            self.playing = False
+            pygame.mixer.music.stop()
+            # pygame.mixer.quit()
+            # pygame.mixer.init()
 
     def load_file(self):
         path = filedialog.askopenfilename(
