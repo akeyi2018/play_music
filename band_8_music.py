@@ -53,7 +53,7 @@ class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("VU Meter")
-        self.master.geometry("800x500")
+        self.master.geometry("790x350")
 
         self.samples = None
         self.rate = 44100
@@ -81,8 +81,8 @@ class VUMeterApp:
         self.stop_button.grid(row=0, column=2, padx=5)
 
         # VUメーターフレーム
-        self.canvas = tk.Canvas(self.master, width=760, height=250, bg='black')
-        self.canvas.grid(row=1, column=0, padx=20)
+        self.canvas = tk.Canvas(self.master, width=720, height=220, bg='black')
+        self.canvas.grid(row=1, column=0, padx=30)
 
         self.bars = {}
         self.labels = {}
@@ -91,8 +91,8 @@ class VUMeterApp:
 
         for i, (name, color) in enumerate(zip(band_names, colors)):
             x = 40 + i * 85
-            self.bars[name] = self.canvas.create_rectangle(x, 230, x + 40, 230, fill=color)
-            self.labels[name] = self.canvas.create_text(x + 20, 240, text=name, fill='white')
+            self.bars[name] = self.canvas.create_rectangle(x, 150, x + 40, 150, fill=color)
+            self.labels[name] = self.canvas.create_text(x + 20, 200, text=name, fill='white')
 
         # ファイル名表示
         self.filename_label = tk.Label(self.master, text="ファイル未選択", fg="gray")
@@ -145,7 +145,13 @@ class VUMeterApp:
         self.samples = np.array(self.audio_segment.get_array_of_samples()).astype(np.float32)
         self.samples = self.samples / np.max(np.abs(self.samples))
 
-        self.filename_label.config(text=f"選択ファイル: {path.split('/')[-1]}", fg="black")
+        # ファイル名（またはパス）の省略処理
+        display_name = path.split('/')[-1]
+        max_len = 50
+        if len(display_name) > max_len:
+            display_name = display_name[:25] + "..." + display_name[-20:]
+
+        self.filename_label.config(text=f"選択ファイル: {display_name}", fg="black")
         self.play_pause_button.config(state=tk.NORMAL)
         self.index = 0
 
