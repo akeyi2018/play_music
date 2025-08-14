@@ -49,11 +49,17 @@ def multi_band_energies(freqs, amp, bands, gain=1.0):
         results.append(normalize(energy))
     return results
 
+def format_time(seconds):
+    """秒数を mm:ss 形式に変換"""
+    seconds = int(seconds)
+    m, s = divmod(seconds, 60)
+    return f"{m:02}:{s:02}"
+
 class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("VU Meter")
-        self.master.geometry("790x350")
+        self.master.geometry("790x430")
 
         self.samples = None
         self.rate = 44100
@@ -62,6 +68,8 @@ class VUMeterApp:
         self.playing = False
         self.paused = False
         self.audio_segment = None
+        self.duration_seconds = 0
+        self.user_dragging = False
 
         self.create_widgets()
         pygame.mixer.init()
@@ -80,9 +88,23 @@ class VUMeterApp:
         self.stop_button = tk.Button(control_frame, text="停止", command=self.stop_play)
         self.stop_button.grid(row=0, column=2, padx=5)
 
+        # 再生進捗スライダー
+        self.progress_slider = tk.Scale(self.master, from_=0, to=100, orient="horizontal", length=600)
+        self.progress_slider.grid(row=1, column=0, pady=5)
+        self.progress_slider.bind("<Button-1>", self.on_slider_press)
+        self.progress_slider.bind("<ButtonRelease-1>", self.on_slider_release)
+
+        # 時間表示ラベル
+        time_frame = tk.Frame(self.master)
+        time_frame.grid(row=2, column=0, pady=2)
+        self.elapsed_time_label = tk.Label(time_frame, text="00:00")
+        self.elapsed_time_label.pack(side="left", padx=10)
+        self.total_time_label = tk.Label(time_frame, text="00:00")
+        self.total_time_label.pack(side="right", padx=10)
+
         # VUメーターフレーム
         self.canvas = tk.Canvas(self.master, width=720, height=220, bg='black')
-        self.canvas.grid(row=1, column=0, padx=30)
+        self.canvas.grid(row=3, column=0, padx=30)
 
         self.bars = {}
         self.labels = {}
@@ -96,7 +118,21 @@ class VUMeterApp:
 
         # ファイル名表示
         self.filename_label = tk.Label(self.master, text="ファイル未選択", fg="gray")
-        self.filename_label.grid(row=2, column=0, pady=5)
+        self.filename_label.grid(row=4, column=0, pady=5)
+
+    def on_slider_press(self, event):
+        self.user_dragging = True
+
+    def on_slider_release(self, event):
+        self.user_dragging = False
+        pos_seconds = float(self.progress_slider.get())
+        self.index = int(pos_seconds * self.rate)
+        pygame.mixer.music.stop()
+        pygame.mixer.music.play(start=pos_seconds)
+        self.elapsed_time_label.config(text=format_time(pos_seconds))
+        if not self.playing:
+            self.playing = True
+            self.update_meter()
 
     def toggle_play_pause(self):
         if self.samples is None:
@@ -124,6 +160,8 @@ class VUMeterApp:
             pygame.mixer.music.stop()
             self.play_pause_button.config(text="再生")
             self.index = 0
+            self.progress_slider.set(0)
+            self.elapsed_time_label.config(text="00:00")
 
     def load_file(self):
         path = filedialog.askopenfilename(
@@ -144,8 +182,10 @@ class VUMeterApp:
         self.audio_segment = AudioSegment.from_file(path).set_channels(1).set_frame_rate(self.rate)
         self.samples = np.array(self.audio_segment.get_array_of_samples()).astype(np.float32)
         self.samples = self.samples / np.max(np.abs(self.samples))
+        self.duration_seconds = len(self.samples) / self.rate
+        self.progress_slider.config(to=self.duration_seconds)
+        self.total_time_label.config(text=format_time(self.duration_seconds))
 
-        # ファイル名（またはパス）の省略処理
         display_name = path.split('/')[-1]
         max_len = 50
         if len(display_name) > max_len:
@@ -154,6 +194,8 @@ class VUMeterApp:
         self.filename_label.config(text=f"選択ファイル: {display_name}", fg="black")
         self.play_pause_button.config(state=tk.NORMAL)
         self.index = 0
+        self.progress_slider.set(0)
+        self.elapsed_time_label.config(text="00:00")
 
     def update_meter(self):
         if not self.playing or self.paused:
@@ -164,19 +206,22 @@ class VUMeterApp:
             self.playing = False
             return
 
-        chunk = self.samples[self.index : self.index + self.chunk_size]
+        chunk = self.samples[self.index: self.index + self.chunk_size]
         self.index += self.chunk_size
 
         freqs, amp = calculate_fft(chunk, self.rate)
-
         bass_levels = multi_band_energies(freqs, amp, BASS_RANGES, bass_gain)
         mid_levels = multi_band_energies(freqs, amp, MID_RANGES, mid_gain)
         treble_levels = multi_band_energies(freqs, amp, TREBLE_RANGES, treble_gain)
-
         all_levels = bass_levels + mid_levels + treble_levels
 
         for name, val in zip(self.bars.keys(), all_levels):
             self.draw_bar(name, val)
+
+        if not self.user_dragging:
+            current_sec = self.index / self.rate
+            self.progress_slider.set(current_sec)
+            self.elapsed_time_label.config(text=format_time(current_sec))
 
         message = ",".join(f"{v:.3f}" for v in all_levels)
         send_udp_rgb_message(message)
