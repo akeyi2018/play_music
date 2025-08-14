@@ -70,6 +70,7 @@ class VUMeterApp:
         self.audio_segment = None
         self.duration_seconds = 0
         self.user_dragging = False
+        self.font = ("メイリオ", "12")
 
         self.create_widgets()
         pygame.mixer.init()
@@ -79,17 +80,27 @@ class VUMeterApp:
         control_frame = tk.Frame(self.master)
         control_frame.grid(row=0, column=0, pady=10)
 
-        self.load_button = tk.Button(control_frame, text="ファイルをロード", command=self.load_file)
+        self.load_button = tk.Button(control_frame, 
+                                    text="ファイルをロード",
+                                    font=self.font,
+                                    command=self.load_file)
         self.load_button.grid(row=0, column=0, padx=5)
 
-        self.play_pause_button = tk.Button(control_frame, text="再生", state=tk.DISABLED, command=self.toggle_play_pause)
+        self.play_pause_button = tk.Button(control_frame, text="再生",
+                                           font=self.font, 
+                                           state=tk.DISABLED, command=self.toggle_play_pause)
         self.play_pause_button.grid(row=0, column=1, padx=5)
 
-        self.stop_button = tk.Button(control_frame, text="停止", command=self.stop_play)
+        self.stop_button = tk.Button(control_frame, text="停止",
+                                     font=self.font, 
+                                     command=self.stop_play)
         self.stop_button.grid(row=0, column=2, padx=5)
 
         # 再生進捗スライダー
-        self.progress_slider = tk.Scale(self.master, from_=0, to=100, orient="horizontal", length=600)
+        self.progress_slider = tk.Scale(self.master, from_=0, to=100, 
+                                        orient="horizontal",
+                                        showvalue=False, 
+                                        length=600)
         self.progress_slider.grid(row=1, column=0, pady=5)
         self.progress_slider.bind("<Button-1>", self.on_slider_press)
         self.progress_slider.bind("<ButtonRelease-1>", self.on_slider_release)
@@ -97,10 +108,10 @@ class VUMeterApp:
         # 時間表示ラベル
         time_frame = tk.Frame(self.master)
         time_frame.grid(row=2, column=0, pady=2)
-        self.elapsed_time_label = tk.Label(time_frame, text="00:00")
-        self.elapsed_time_label.pack(side="left", padx=10)
-        self.total_time_label = tk.Label(time_frame, text="00:00")
-        self.total_time_label.pack(side="right", padx=10)
+        self.elapsed_time_label = tk.Label(time_frame, text="00:00", font=self.font)
+        self.elapsed_time_label.pack(side="left", padx=1)
+        self.total_time_label = tk.Label(time_frame, text="/ 00:00", font=self.font)
+        self.total_time_label.pack(side="right", padx=1)
 
         # VUメーターフレーム
         self.canvas = tk.Canvas(self.master, width=720, height=220, bg='black')
@@ -152,6 +163,7 @@ class VUMeterApp:
             pygame.mixer.music.unpause()
             self.paused = False
             self.play_pause_button.config(text="一時停止")
+            self.update_meter()  # ← ここを追加して再開時も更新開始
 
     def stop_play(self):
         if self.playing or self.paused:
@@ -184,14 +196,16 @@ class VUMeterApp:
         self.samples = self.samples / np.max(np.abs(self.samples))
         self.duration_seconds = len(self.samples) / self.rate
         self.progress_slider.config(to=self.duration_seconds)
-        self.total_time_label.config(text=format_time(self.duration_seconds))
+        self.total_time_label.config(text='/ ' + format_time(self.duration_seconds))
 
         display_name = path.split('/')[-1]
         max_len = 50
         if len(display_name) > max_len:
             display_name = display_name[:25] + "..." + display_name[-20:]
 
-        self.filename_label.config(text=f"選択ファイル: {display_name}", fg="black")
+        self.filename_label.config(text=f"{display_name}", 
+                                   font=self.font,
+                                   fg="black")
         self.play_pause_button.config(state=tk.NORMAL)
         self.index = 0
         self.progress_slider.set(0)
