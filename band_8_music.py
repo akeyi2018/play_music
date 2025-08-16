@@ -4,7 +4,7 @@ import tkinter as tk
 import pygame
 import socket
 from tkinter import filedialog
-from vu_meter import VUMeter
+from vu_meter_bar import VUMeter
 
 # UDP設定
 UDP_IP = "192.168.0.202"

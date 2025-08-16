@@ -10,3 +10,5 @@ TREBLE_RANGES = [(2000, 4000), (4000, 8000)]
 BASS_GAIN = 1.0
 MID_GAIN = 1.0
 TREBLE_GAIN = 1.2
+
+BAR_START = 50  # 中心からバー開始位置までの距離

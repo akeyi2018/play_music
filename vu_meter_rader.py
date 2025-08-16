@@ -37,32 +37,46 @@ class RaderMeter:
         for i in range(self.num_bands):
             self.current_values[i] += (self.target_values[i] - self.current_values[i]) * self.step
 
-        # 古い三角形削除
+        # 古い多段ポリゴン削除
         for poly in self.polygons:
             self.canvas.delete(poly)
         self.polygons = []
 
-        # 頂点計算
-        points = []
+        segments = 10  # 中央→外側に分割
         for i, val in enumerate(self.current_values):
-            angle = 2*math.pi/self.num_bands * i - math.pi/2
-            r = val * self.max_radius
-            x = self.center[0] + r * math.cos(angle)
-            y = self.center[1] + r * math.sin(angle)
-            points.append((x, y))
-
-        # 三角形描画
-        for i in range(self.num_bands):
-            x0, y0 = self.center
-            x1, y1 = points[i]
-            x2, y2 = points[(i+1)%self.num_bands]
-            poly = self.canvas.create_polygon(
-                x0, y0, x1, y1, x2, y2,
-                fill=self.colors[i], outline="white", width=1
-            )
-            self.polygons.append(poly)
+            angle1 = 2*math.pi/self.num_bands * i - math.pi/2
+            angle2 = 2*math.pi/self.num_bands * ((i+1)%self.num_bands) - math.pi/2
+            for s in range(segments):
+                r0 = (s/segments) * val * self.max_radius
+                r1 = ((s+1)/segments) * val * self.max_radius
+                # グラデーション色計算
+                color = self._interpolate_color("#000000", self.colors[i], (s+1)/segments)
+                x0 = self.center[0] + r0 * math.cos(angle1)
+                y0 = self.center[1] + r0 * math.sin(angle1)
+                x1 = self.center[0] + r1 * math.cos(angle1)
+                y1 = self.center[1] + r1 * math.sin(angle1)
+                x2 = self.center[0] + r1 * math.cos(angle2)
+                y2 = self.center[1] + r1 * math.sin(angle2)
+                x3 = self.center[0] + r0 * math.cos(angle2)
+                y3 = self.center[1] + r0 * math.sin(angle2)
+                poly = self.canvas.create_polygon(
+                    x0,y0,x1,y1,x2,y2,x3,y3,
+                    fill=color, outline=""
+                )
+                self.polygons.append(poly)
 
         self.canvas.after(30, self._animate)
+
+    def _interpolate_color(self, start_color, end_color, factor):
+        """0~1のfactorでstart→endを補間"""
+        def hex_to_rgb(c): return int(c[1:3],16), int(c[3:5],16), int(c[5:7],16)
+        def rgb_to_hex(r,g,b): return f"#{r:02x}{g:02x}{b:02x}"
+        r1,g1,b1 = hex_to_rgb(start_color)
+        r2,g2,b2 = hex_to_rgb(end_color)
+        r = int(r1 + (r2-r1)*factor)
+        g = int(g1 + (g2-g1)*factor)
+        b = int(b1 + (b2-b1)*factor)
+        return rgb_to_hex(r,g,b)
 
     def update_values(self, values):
         if len(values) == self.num_bands:

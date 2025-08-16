@@ -4,6 +4,8 @@ import tkinter as tk
 import pygame
 from tkinter import filedialog
 from vu_meter_rader import RaderMeter
+from vu_meter_bar import VUMeter
+from mix_meter import RadialBarMeter
 from utility import MusicUtility
 from settings import *
 
@@ -16,7 +18,17 @@ class VUMeterApp:
         # Utility のインスタンスを作成
         self.utility = MusicUtility()
 
-        self.vu_meter = RaderMeter(self.master)
+        # VUメーター
+        self.rader_meter = RaderMeter(self.master)
+        self.bar_meter = VUMeter(self.master)
+        self.radial_bar_meter = RadialBarMeter(self.master)
+        
+
+        # デフォルト表示はバーチャート
+        self.active_meter = "bar"
+        self.bar_meter.canvas.grid()
+        self.rader_meter.canvas.grid_remove()
+        self.radial_bar_meter.canvas.grid_remove()
 
         self.samples = None
         self.rate = 44100
@@ -53,6 +65,12 @@ class VUMeterApp:
                                      command=self.stop_play)
         self.stop_button.grid(row=0, column=2, padx=5)
 
+        # 切替ボタン
+        self.switch_button = tk.Button(control_frame, text="切替: レーダー/バー",
+                                       font=self.font, command=self.switch_meter)
+        self.switch_button.grid(row=0, column=3, padx=5)
+
+
         # 再生進捗スライダー
         self.progress_slider = tk.Scale(self.master, from_=0, to=100, 
                                         orient="horizontal",
@@ -73,6 +91,24 @@ class VUMeterApp:
         # ファイル名表示
         self.filename_label = tk.Label(self.master, text="ファイル未選択", fg="gray")
         self.filename_label.grid(row=4, column=0, pady=5)
+
+    def switch_meter(self):
+        # 順番に切替
+        if self.active_meter == "rader":
+            self.active_meter = "bar"
+            self.rader_meter.canvas.grid_remove()
+            self.bar_meter.canvas.grid()
+            self.radial_bar_meter.canvas.grid_remove()
+        elif self.active_meter == "bar":
+            self.active_meter = "radial"
+            self.rader_meter.canvas.grid_remove()
+            self.bar_meter.canvas.grid_remove()
+            self.radial_bar_meter.canvas.grid()
+        else:
+            self.active_meter = "rader"
+            self.rader_meter.canvas.grid()
+            self.bar_meter.canvas.grid_remove()
+            self.radial_bar_meter.canvas.grid_remove()
 
     def on_slider_press(self, event):
         self.user_dragging = True
@@ -169,8 +205,14 @@ class VUMeterApp:
         treble_levels = self.utility.multi_band_energies(freqs, amp, TREBLE_RANGES, TREBLE_GAIN)
         all_levels = bass_levels + mid_levels + treble_levels
 
-        # RaderMeter に目標値だけ渡す
-        self.vu_meter.update_values(all_levels)
+         # アクティブなメーターに反映
+        if self.active_meter == "rader":
+            self.rader_meter.update_values(all_levels)
+        elif self.active_meter == "bar":
+            for name, val in zip(self.bar_meter.band_names, all_levels):
+                self.bar_meter.update_bar(name, val)
+        else:
+            self.radial_bar_meter.update_values(all_levels)
 
         if not self.user_dragging:
             current_sec = self.index / self.rate
