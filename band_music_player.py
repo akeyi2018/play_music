@@ -189,9 +189,9 @@ class VUMeterApp:
         self.total_time_label.config(text='/ ' + self.utility.format_time(self.duration_seconds))
 
         display_name = path.split('/')[-1]
-        max_len = 50
+        max_len = 32
         if len(display_name) > max_len:
-            display_name = display_name[:25] + "..." + display_name[-20:]
+            display_name = display_name[:16] + "..." + display_name[-16:]
 
         self.filename_label.config(text=f"{display_name}", font=self.font, fg="black")
         self.play_pause_button.config(state=tk.NORMAL)
@@ -217,7 +217,7 @@ class VUMeterApp:
         treble_levels = self.utility.multi_band_energies(freqs, amp, TREBLE_RANGES, TREBLE_GAIN)
         all_levels = bass_levels + mid_levels + treble_levels
 
-         # アクティブなメーターに反映
+        # アクティブなメーターに反映
         if self.active_meter == "rader":
             self.rader_meter.update_values(all_levels)
         elif self.active_meter == "bar":

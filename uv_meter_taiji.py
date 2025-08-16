@@ -11,8 +11,8 @@ class RadialBarMeter:
                        "#ffff00","#ffff00","#00ff00","#00ff00"]
         self.num_bands = len(self.band_names)
         self.center = (200, 200)
-        self.max_radius = 120       # バーの最大長さ
-        self.bar_start = 30         # バーの開始位置
+        self.max_radius = 110       # バーの最大長さ
+        self.bar_start = 60         # バーの開始位置
         self.bar_width_angle = 2*math.pi/self.num_bands * 0.6  # バー幅
         self.label_radius = 180     # ラベル固定位置（バーより外側）
         self.polygons = []
@@ -52,7 +52,7 @@ class RadialBarMeter:
             outer = self.bar_start + r
 
             # 棒の太さ（小さいほど細い棒になる）
-            half_w = 8  
+            half_w = 16  
             dx = half_w * math.cos(angle_center + math.pi/2)
             dy = half_w * math.sin(angle_center + math.pi/2)
 
