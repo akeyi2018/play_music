@@ -13,8 +13,8 @@ def interpolate_color(color1, color2, factor):
 
 class VUMeter:
     def __init__(self, master):
-        self.canvas = tk.Canvas(master, width=720, height=220, bg="black")
-        self.canvas.grid(row=3, column=0, padx=30)
+        self.canvas = tk.Canvas(master, width=400, height=400, bg="black")
+        self.canvas.grid(row=3, column=0, padx=10, pady=10)
 
         self.bars = {}
         self.labels = {}
@@ -23,18 +23,25 @@ class VUMeter:
         self.start_colors = ["#0000ff","#0000ff","#ff0000","#ff0000","#ffff00","#ffff00","#00ff00","#00ff00"]
         self.end_colors   = ["#00ffff","#00ffff","#ff8080","#ff8080","#ffff80","#ffff80","#80ff80","#80ff80"]
 
+        # Canvas サイズに合わせた配置
+        total_bars = len(self.band_names)
+        bar_width = 30
+        gap = (400 - total_bars*bar_width) / (total_bars + 1)
+        max_height = 200
+        bottom_y = 300
+
         for i, name in enumerate(self.band_names):
-            x = 40 + i * 85
+            x0 = gap + i*(bar_width + gap)
             self.bars[name] = []
             segments = 20  # 細かく分割
             for s in range(segments):
-                y0 = 150 - (s+1)*(120/segments)
-                y1 = 150 - s*(120/segments)
+                y0 = bottom_y - (s+1)*(max_height/segments)
+                y1 = bottom_y - s*(max_height/segments)
                 factor = s/(segments-1)
                 color = interpolate_color(self.start_colors[i], self.end_colors[i], factor)
-                rect = self.canvas.create_rectangle(x, y0, x+40, y1, fill=color, width=0)
+                rect = self.canvas.create_rectangle(x0, y0, x0+bar_width, y1, fill=color, width=0)
                 self.bars[name].append(rect)
-            self.labels[name] = self.canvas.create_text(x+20, 200, text=name, fill="white")
+            self.labels[name] = self.canvas.create_text(x0+bar_width/2, bottom_y+20, text=name, fill="white")
 
     def update_bar(self, band_name, value):
         """
@@ -45,15 +52,26 @@ class VUMeter:
             return
         segments = len(self.bars[band_name])
         for i, rect in enumerate(self.bars[band_name]):
-            # セグメントの表示割合
             segment_factor = (i + 1)/segments
-            # 色を段階的に変える
             if segment_factor <= value:
                 factor = segment_factor / value if value > 0 else 0
-                # start→end に色補間
                 color = interpolate_color(self.start_colors[self.band_names.index(band_name)],
                                           self.end_colors[self.band_names.index(band_name)],
                                           factor)
                 self.canvas.itemconfigure(rect, fill=color, state="normal")
             else:
                 self.canvas.itemconfigure(rect, fill=self.start_colors[self.band_names.index(band_name)], state="hidden")
+
+# ---- 動作確認 ----
+if __name__=="__main__":
+    root = tk.Tk()
+    meter = VUMeter(root)
+
+    import random
+    def random_update():
+        for name in meter.band_names:
+            meter.update_bar(name, random.random())
+        root.after(500, random_update)
+
+    random_update()
+    root.mainloop()

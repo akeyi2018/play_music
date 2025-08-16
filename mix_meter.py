@@ -1,82 +1,92 @@
 import tkinter as tk
-import math
+import math, time, random
 
-class RadialBarMeter:
-    def __init__(self, master):
+class RadialRippleMeter:
+    def __init__(self, master, ripple_alpha=150):
         self.canvas = tk.Canvas(master, width=400, height=400, bg="black")
-        self.canvas.grid(row=3, column=0, padx=30)
+        self.canvas.grid(row=3, column=0)
+        self.center = (200, 200)
+        self.ripple_alpha = ripple_alpha  # 擬似透明度（0-255）
 
+        # バンド設定
         self.band_names = ["BASS1","BASS2","BASS3","MID1","MID2","MID3","TREBLE1","TREBLE2"]
         self.colors = ["#0000ff","#0000ff","#ff0000","#ff0000",
                        "#ffff00","#ffff00","#00ff00","#00ff00"]
         self.num_bands = len(self.band_names)
-        self.center = (200, 200)
-        self.max_radius = 120       # バーの最大長さ
-        self.bar_start = 10         # バーの開始位置
-        self.bar_width_angle = 2*math.pi/self.num_bands * 0.6  # バー幅
-        self.label_radius = 180     # ラベル固定位置（バーより外側）
-        self.polygons = []
-        self.labels = []
+        self.bar_start = 10
+        self.bar_width_angle = 2*math.pi/self.num_bands * 0.8
+        self.max_radius = 120
 
-        # アニメーション用
-        self.current_values = [0.0]*self.num_bands
-        self.target_values = [0.0]*self.num_bands
-        self.step = 0.2  # 追従速度
+        # 波紋リスト
+        self.ripples = [[] for _ in range(self.num_bands)]
+        self.canvas_items = []
 
-        # ラベルを外側に固定
+        # ラベル
         for i, name in enumerate(self.band_names):
             angle_center = 2*math.pi/self.num_bands * i - math.pi/2
-            label_x = self.center[0] + self.label_radius * math.cos(angle_center)
-            label_y = self.center[1] + self.label_radius * math.sin(angle_center)
-            self.labels.append(self.canvas.create_text(label_x, label_y, text=name, fill="white"))
+            label_x = self.center[0] + (self.max_radius+40) * math.cos(angle_center)
+            label_y = self.center[1] + (self.max_radius+40) * math.sin(angle_center)
+            self.canvas.create_text(label_x, label_y, text=name, fill="white")
 
-        # アニメーション開始
         self._animate()
 
+    def _fade_color(self, hex_color, alpha):
+        """擬似透明度: alpha=255で元色, alpha=0で白"""
+        r = int(hex_color[1:3], 16)
+        g = int(hex_color[3:5], 16)
+        b = int(hex_color[5:7], 16)
+        r = int(r + (255-r)*(255-alpha)/255)
+        g = int(g + (255-g)*(255-alpha)/255)
+        b = int(b + (255-b)*(255-alpha)/255)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
     def _animate(self):
-        # 現在値を目標値に近づける
+        now = time.time()
+
+        # 前の波紋削除
+        for item in self.canvas_items:
+            self.canvas.delete(item)
+        self.canvas_items.clear()
+
+        # 波紋描画
         for i in range(self.num_bands):
-            self.current_values[i] += (self.target_values[i] - self.current_values[i]) * self.step
+            new_ripples = []
+            for start_time, max_r in self.ripples[i]:
+                elapsed = now - start_time
+                radius = int(self.bar_start + elapsed*150)  # 波紋の広がる速さ
+                if radius < max_r:
+                    alpha = max(0, int(self.ripple_alpha * (1 - elapsed*0.8)))
+                    color = self._fade_color(self.colors[i], alpha)
+                    item = self.canvas.create_oval(
+                        self.center[0]-radius, self.center[1]-radius,
+                        self.center[0]+radius, self.center[1]+radius,
+                        outline=color, width=2
+                    )
+                    self.canvas_items.append(item)
+                    new_ripples.append((start_time, max_r))
+            self.ripples[i] = new_ripples
 
-        # 古いバー削除
-        for poly in self.polygons:
-            self.canvas.delete(poly)
-        self.polygons = []
-
-        # 放射バー描画
-        for i, val in enumerate(self.current_values):
-            angle_center = 2*math.pi/self.num_bands * i - math.pi/2
-            r = val * self.max_radius
-
-            # バーの基準点（中心から一定距離）
-            x0 = self.center[0] + self.bar_start * math.cos(angle_center)
-            y0 = self.center[1] + self.bar_start * math.sin(angle_center)
-
-            # 扇形の左右頂点
-            angle1 = angle_center - self.bar_width_angle/2
-            angle2 = angle_center + self.bar_width_angle/2
-            x1, y1 = x0 + r * math.cos(angle1), y0 + r * math.sin(angle1)
-            x2, y2 = x0 + r * math.cos(angle2), y0 + r * math.sin(angle2)
-
-            poly = self.canvas.create_polygon(x0, y0, x1, y1, x2, y2, fill=self.colors[i], outline="white")
-            self.polygons.append(poly)
-
-        self.canvas.after(30, self._animate)
+        self.canvas.after(50, self._animate)  # 描画フレーム更新
 
     def update_values(self, values):
-        if len(values) == self.num_bands:
-            self.target_values = values
+        """FFT値に応じて波紋生成"""
+        if len(values) != self.num_bands:
+            return
+        now = time.time()
+        for i, val in enumerate(values):
+            if val > 0.05:
+                self.ripples[i].append((now, self.max_radius * val))
 
-# ------------------- 動作確認 -------------------
-if __name__ == "__main__":
+# ---- 動作確認 ----
+if __name__=="__main__":
     root = tk.Tk()
-    meter = RadialBarMeter(root)
+    meter = RadialRippleMeter(root, ripple_alpha=200)
 
-    import random
+    # ランダム値で更新
     def random_update():
         values = [random.random() for _ in range(len(meter.band_names))]
         meter.update_values(values)
-        root.after(500, random_update)
+        root.after(50, random_update)
 
     random_update()
     root.mainloop()

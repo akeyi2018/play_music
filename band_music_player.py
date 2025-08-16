@@ -5,15 +5,17 @@ import pygame
 from tkinter import filedialog
 from vu_meter_rader import RaderMeter
 from vu_meter_bar import VUMeter
-from mix_meter import RadialBarMeter
+from mix_meter import RadialRippleMeter
+from uv_meter_taiji import RadialBarMeter
 from utility import MusicUtility
 from settings import *
+import time
 
 class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("VU Meter")
-        self.master.geometry("790x600")
+        self.master.geometry("530x600")
 
         # Utility のインスタンスを作成
         self.utility = MusicUtility()
@@ -21,14 +23,15 @@ class VUMeterApp:
         # VUメーター
         self.rader_meter = RaderMeter(self.master)
         self.bar_meter = VUMeter(self.master)
+        self.radial_ripple_meter = RadialRippleMeter(self.master)
         self.radial_bar_meter = RadialBarMeter(self.master)
         
-
         # デフォルト表示はバーチャート
         self.active_meter = "bar"
         self.bar_meter.canvas.grid()
         self.rader_meter.canvas.grid_remove()
         self.radial_bar_meter.canvas.grid_remove()
+        self.radial_ripple_meter.canvas.grid_remove()
 
         self.samples = None
         self.rate = 44100
@@ -66,7 +69,7 @@ class VUMeterApp:
         self.stop_button.grid(row=0, column=2, padx=5)
 
         # 切替ボタン
-        self.switch_button = tk.Button(control_frame, text="切替: レーダー/バー",
+        self.switch_button = tk.Button(control_frame, text="バー",
                                        font=self.font, command=self.switch_meter)
         self.switch_button.grid(row=0, column=3, padx=5)
 
@@ -75,8 +78,8 @@ class VUMeterApp:
         self.progress_slider = tk.Scale(self.master, from_=0, to=100, 
                                         orient="horizontal",
                                         showvalue=False, 
-                                        length=600)
-        self.progress_slider.grid(row=1, column=0, pady=5)
+                                        length=500)
+        self.progress_slider.grid(row=1, column=0, pady=5, padx=10)
         self.progress_slider.bind("<Button-1>", self.on_slider_press)
         self.progress_slider.bind("<ButtonRelease-1>", self.on_slider_release)
 
@@ -93,22 +96,31 @@ class VUMeterApp:
         self.filename_label.grid(row=4, column=0, pady=5)
 
     def switch_meter(self):
-        # 順番に切替
-        if self.active_meter == "rader":
-            self.active_meter = "bar"
-            self.rader_meter.canvas.grid_remove()
-            self.bar_meter.canvas.grid()
-            self.radial_bar_meter.canvas.grid_remove()
-        elif self.active_meter == "bar":
-            self.active_meter = "radial"
-            self.rader_meter.canvas.grid_remove()
-            self.bar_meter.canvas.grid_remove()
-            self.radial_bar_meter.canvas.grid()
-        else:
-            self.active_meter = "rader"
-            self.rader_meter.canvas.grid()
-            self.bar_meter.canvas.grid_remove()
-            self.radial_bar_meter.canvas.grid_remove()
+        # メーターをリストで管理（名前, canvas, ボタン用ラベル）
+        meters = [
+            ("rader", self.rader_meter.canvas, "レーダー"),
+            ("bar", self.bar_meter.canvas, "バー"),
+            ("radial", self.radial_bar_meter.canvas, "TAIJI"),
+            ("ripple", self.radial_ripple_meter.canvas, "波紋")
+        ]
+
+        # 現在のインデックスを取得
+        current_idx = next(i for i, (name, _, _) in enumerate(meters) if name == self.active_meter)
+        # 次のメーターに切替
+        next_idx = (current_idx + 1) % len(meters)
+        self.active_meter = meters[next_idx][0]
+
+        # 表示／非表示
+        for name, canvas, _ in meters:
+            if name == self.active_meter:
+                canvas.grid()
+            else:
+                canvas.grid_remove()
+
+        # 切替ボタンの表示を次のメーター名に変更
+        next_meter_name = meters[(next_idx) % len(meters)][2]  # 次の次のメーターを表示
+        self.switch_button.config(text=f"{next_meter_name}")
+        
 
     def on_slider_press(self, event):
         self.user_dragging = True
@@ -213,6 +225,14 @@ class VUMeterApp:
                 self.bar_meter.update_bar(name, val)
         else:
             self.radial_bar_meter.update_values(all_levels)
+
+            # ----- ここで波紋生成 -----
+            now = time.time()
+            for i, val in enumerate(all_levels):
+                if val > 0.05:
+                    # 前回生成から間隔を空けたい場合は last_ripple_time を使う
+                    self.radial_ripple_meter.ripples[i].append(
+                        (now, self.radial_bar_meter.max_radius * val))
 
         if not self.user_dragging:
             current_sec = self.index / self.rate
