@@ -4,6 +4,7 @@ import tkinter as tk
 import pygame
 import socket
 from tkinter import filedialog
+from vu_meter import VUMeter
 
 # UDP設定
 UDP_IP = "192.168.0.202"
@@ -57,7 +58,10 @@ def format_time(seconds):
 
 class VUMeterApp:
     def __init__(self, master):
+        
         self.master = master
+        self.vu_meter = VUMeter(self.master)
+
         self.master.title("VU Meter")
         self.master.geometry("790x430")
 
@@ -114,18 +118,19 @@ class VUMeterApp:
         self.total_time_label.pack(side="right", padx=1)
 
         # VUメーターフレーム
-        self.canvas = tk.Canvas(self.master, width=720, height=220, bg='black')
-        self.canvas.grid(row=3, column=0, padx=30)
+        # self.canvas = tk.Canvas(self.master, width=720, height=220, bg='black')
+        # self.canvas.grid(row=3, column=0, padx=30)
 
-        self.bars = {}
-        self.labels = {}
-        band_names = ["BASS1", "BASS2", "BASS3", "MID1", "MID2", "MID3", "TREBLE1", "TREBLE2"]
-        colors = ["blue", "blue", "red", "red", "yellow", "yellow", "green", "green"]
+        # self.bars = {}
+        # self.labels = {}
+        # band_names = ["BASS1", "BASS2", "BASS3", "MID1", "MID2", "MID3", "TREBLE1", "TREBLE2"]
+        # colors = ["blue", "blue", "red", "red", "yellow", "yellow", "green", "green"]
 
-        for i, (name, color) in enumerate(zip(band_names, colors)):
-            x = 40 + i * 85
-            self.bars[name] = self.canvas.create_rectangle(x, 150, x + 40, 150, fill=color)
-            self.labels[name] = self.canvas.create_text(x + 20, 200, text=name, fill='white')
+        # for i, (name, color) in enumerate(zip(band_names, colors)):
+        #     x = 40 + i * 85
+        #     self.bars[name] = self.canvas.create_rectangle(x, 150, x + 40, 150, fill=color)
+        #     self.labels[name] = self.canvas.create_text(x + 20, 200, text=name, fill='white')
+
 
         # ファイル名表示
         self.filename_label = tk.Label(self.master, text="ファイル未選択", fg="gray")
@@ -229,8 +234,9 @@ class VUMeterApp:
         treble_levels = multi_band_energies(freqs, amp, TREBLE_RANGES, treble_gain)
         all_levels = bass_levels + mid_levels + treble_levels
 
-        for name, val in zip(self.bars.keys(), all_levels):
-            self.draw_bar(name, val)
+        for name, val in zip(self.vu_meter.bars.keys(), all_levels):
+            self.vu_meter.update_bar(name, val)
+        # self.vu_meter.update_bar()
 
         if not self.user_dragging:
             current_sec = self.index / self.rate
@@ -242,12 +248,12 @@ class VUMeterApp:
 
         self.master.after(50, self.update_meter)
 
-    def draw_bar(self, name, value):
-        max_height = 150
-        base_y = 180
-        height = int(value * max_height)
-        x0, y0, x1, _ = self.canvas.coords(self.bars[name])
-        self.canvas.coords(self.bars[name], x0, base_y - height, x1, base_y)
+    # def draw_bar(self, name, value):
+    #     max_height = 150
+    #     base_y = 180
+    #     height = int(value * max_height)
+    #     x0, y0, x1, _ = self.canvas.coords(self.bars[name])
+    #     self.canvas.coords(self.bars[name], x0, base_y - height, x1, base_y)
 
 def main():
     root = tk.Tk()
