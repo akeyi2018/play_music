@@ -2,67 +2,19 @@ import numpy as np
 from pydub import AudioSegment
 import tkinter as tk
 import pygame
-import socket
 from tkinter import filedialog
 from vu_meter_rader import RaderMeter
+from utility import MusicUtility
+from settings import *
 
-# UDP設定
-UDP_IP = "192.168.0.202"
-UDP_PORT = 5005
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-# バンド定義
-BASS_RANGES = [(20, 100), (100, 180), (180, 250)]
-MID_RANGES = [(250, 600), (600, 1200), (1200, 2000)]
-TREBLE_RANGES = [(2000, 4000), (4000, 8000)]
-
-bass_gain = 1.0
-mid_gain = 1.0
-treble_gain = 1.2
-
-def send_udp_rgb_message(msg):
-    try:
-        sock.sendto(msg.encode(), (UDP_IP, UDP_PORT))
-    except Exception as e:
-        print("UDP送信エラー:", e)
-
-def calculate_fft(chunk, rate):
-    window = np.hamming(len(chunk))
-    yf = np.fft.rfft(chunk * window)
-    freqs = np.fft.rfftfreq(len(chunk), 1 / rate)
-    amplitude = np.abs(yf)
-    return freqs, amplitude
-
-def band_energy(freqs, amp, band):
-    mask = (freqs >= band[0]) & (freqs < band[1])
-    band_amp = amp[mask]
-    return np.mean(band_amp) if band_amp.size > 0 else 0
-
-def normalize(val):
-    val = np.nan_to_num(val)
-    scaled = np.log10(val + 1e-3)
-    return max(0.0, min(scaled / 2, 1.0))
-
-def multi_band_energies(freqs, amp, bands, gain=1.0):
-    results = []
-    for band in bands:
-        energy = band_energy(freqs, amp, band) * gain
-        results.append(normalize(energy))
-    return results
-
-def format_time(seconds):
-    seconds = int(seconds)
-    m, s = divmod(seconds, 60)
-    return f"{m:02}:{s:02}"
-
-
-
-# ------------------- メインアプリ -------------------
 class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("VU Meter")
-        self.master.geometry("790x430")
+        self.master.geometry("790x600")
+
+        # Utility のインスタンスを作成
+        self.utility = MusicUtility()
 
         self.vu_meter = RaderMeter(self.master)
 
@@ -131,7 +83,7 @@ class VUMeterApp:
         self.index = int(pos_seconds * self.rate)
         pygame.mixer.music.stop()
         pygame.mixer.music.play(start=pos_seconds)
-        self.elapsed_time_label.config(text=format_time(pos_seconds))
+        self.elapsed_time_label.config(text=self.utility.format_time(pos_seconds))
         if not self.playing:
             self.playing = True
             self.update_meter()
@@ -186,7 +138,7 @@ class VUMeterApp:
         self.samples = self.samples / np.max(np.abs(self.samples))
         self.duration_seconds = len(self.samples) / self.rate
         self.progress_slider.config(to=self.duration_seconds)
-        self.total_time_label.config(text='/ ' + format_time(self.duration_seconds))
+        self.total_time_label.config(text='/ ' + self.utility.format_time(self.duration_seconds))
 
         display_name = path.split('/')[-1]
         max_len = 50
@@ -211,22 +163,22 @@ class VUMeterApp:
         chunk = self.samples[self.index: self.index + self.chunk_size]
         self.index += self.chunk_size
 
-        freqs, amp = calculate_fft(chunk, self.rate)
-        bass_levels = multi_band_energies(freqs, amp, BASS_RANGES, bass_gain)
-        mid_levels = multi_band_energies(freqs, amp, MID_RANGES, mid_gain)
-        treble_levels = multi_band_energies(freqs, amp, TREBLE_RANGES, treble_gain)
+        freqs, amp = self.utility.calculate_fft(chunk, self.rate)
+        bass_levels = self.utility.multi_band_energies(freqs, amp, BASS_RANGES, BASS_GAIN)
+        mid_levels = self.utility.multi_band_energies(freqs, amp, MID_RANGES, MID_GAIN)
+        treble_levels = self.utility.multi_band_energies(freqs, amp, TREBLE_RANGES, TREBLE_GAIN)
         all_levels = bass_levels + mid_levels + treble_levels
 
-        # VUMeterに目標値だけ渡す
+        # RaderMeter に目標値だけ渡す
         self.vu_meter.update_values(all_levels)
 
         if not self.user_dragging:
             current_sec = self.index / self.rate
             self.progress_slider.set(current_sec)
-            self.elapsed_time_label.config(text=format_time(current_sec))
+            self.elapsed_time_label.config(text=self.utility.format_time(current_sec))
 
-        message = ",".join(f"{v:.3f}" for v in all_levels)
-        send_udp_rgb_message(message)
+        msg = ",".join(f"{v:.3f}" for v in all_levels)
+        self.utility.send_udp_rgb_message(msg)
 
         self.master.after(50, self.update_meter)
 
