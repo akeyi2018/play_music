@@ -234,9 +234,10 @@ class VUMeterApp:
         treble_levels = multi_band_energies(freqs, amp, TREBLE_RANGES, treble_gain)
         all_levels = bass_levels + mid_levels + treble_levels
 
-        for name, val in zip(self.vu_meter.bars.keys(), all_levels):
-            self.vu_meter.update_bar(name, val)
-        # self.vu_meter.update_bar()
+        # for name, val in zip(self.vu_meter.band_names.keys(), all_levels):
+        #     self.vu_meter.update_bar(name, val)
+
+        self.vu_meter.update_bar(all_levels)
 
         if not self.user_dragging:
             current_sec = self.index / self.rate
@@ -247,13 +248,6 @@ class VUMeterApp:
         send_udp_rgb_message(message)
 
         self.master.after(50, self.update_meter)
-
-    # def draw_bar(self, name, value):
-    #     max_height = 150
-    #     base_y = 180
-    #     height = int(value * max_height)
-    #     x0, y0, x1, _ = self.canvas.coords(self.bars[name])
-    #     self.canvas.coords(self.bars[name], x0, base_y - height, x1, base_y)
 
 def main():
     root = tk.Tk()
