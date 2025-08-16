@@ -48,6 +48,24 @@ class RadialRippleMeter:
             self.canvas.delete(item)
         self.canvas_items.clear()
 
+        # # 波紋描画
+        # for i in range(self.num_bands):
+        #     new_ripples = []
+        #     for start_time, max_r in self.ripples[i]:
+        #         elapsed = now - start_time
+        #         radius = int(self.bar_start + elapsed*150)  # 波紋の広がる速さ
+        #         if radius < max_r:
+        #             alpha = max(0, int(self.ripple_alpha * (1 - elapsed*0.8)))
+        #             color = self._fade_color(self.colors[i], alpha)
+        #             item = self.canvas.create_oval(
+        #                 self.center[0]-radius, self.center[1]-radius,
+        #                 self.center[0]+radius, self.center[1]+radius,
+        #                 outline=color, width=2
+        #             )
+        #             self.canvas_items.append(item)
+        #             new_ripples.append((start_time, max_r))
+        #     self.ripples[i] = new_ripples
+
         # 波紋描画
         for i in range(self.num_bands):
             new_ripples = []
@@ -55,14 +73,21 @@ class RadialRippleMeter:
                 elapsed = now - start_time
                 radius = int(self.bar_start + elapsed*150)  # 波紋の広がる速さ
                 if radius < max_r:
-                    alpha = max(0, int(self.ripple_alpha * (1 - elapsed*0.8)))
-                    color = self._fade_color(self.colors[i], alpha)
-                    item = self.canvas.create_oval(
-                        self.center[0]-radius, self.center[1]-radius,
-                        self.center[0]+radius, self.center[1]+radius,
-                        outline=color, width=2
-                    )
-                    self.canvas_items.append(item)
+                    # 3段階に分ける
+                    steps = 3
+                    for s in range(steps):
+                        inner_r = int(radius * s / steps)
+                        outer_r = int(radius * (s+1) / steps)
+                        alpha = int(self.ripple_alpha * (1 - s/steps) * max(0, 1 - elapsed*0.8))
+                        color = self._fade_color(self.colors[i], alpha)
+                        # 幅を段階ごとに変える（内側=1, 中=2, 外側=3）
+                        width = s + 1
+                        item = self.canvas.create_oval(
+                            self.center[0]-outer_r, self.center[1]-outer_r,
+                            self.center[0]+outer_r, self.center[1]+outer_r,
+                            outline=color, width=width
+                        )
+                        self.canvas_items.append(item)
                     new_ripples.append((start_time, max_r))
             self.ripples[i] = new_ripples
 
