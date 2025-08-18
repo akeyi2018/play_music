@@ -15,10 +15,13 @@ class VideoPlayer:
         # 動画再生しているかどうかのフラグ
         self.is_active = False
         self.playing = False
+        self.length_ms = 0
         
 
     def load_file(self, filepath):
         media = self.instance.media_new(filepath)
+        media.parse()
+        self.length_ms = media.get_duration()
         self.player.set_media(media)
         self.player.set_hwnd(self.video_frame.winfo_id())  # Windows
 
@@ -37,3 +40,4 @@ class VideoPlayer:
         else:
             self.player.play()
             self.playing = True
+

@@ -217,6 +217,22 @@ class VUMeterApp:
         self.video_player.is_active = True
         self.active_meter = None  # 動画プレイヤーがアクティブな場合はメーターを非表示にする
 
+        # 動画の長さを取得（ミリ秒→秒に変換）
+        duration_ms = self.video_player.length_ms
+        logger.info(f"動画の長さ: {duration_ms}ミリ秒")
+        duration_sec = duration_ms / 1000 if duration_ms > 0 else 0
+
+        # スライダーの設定
+        self.progress_slider.config(to=duration_sec)
+        self.progress_slider.set(0)
+
+        # 合計時間ラベルも更新しておく
+        self.total_time_label.config(text='/ ' + self.utility.format_time(duration_sec))
+        self.elapsed_time_label.config(text="00:00")
+
+        # 🔥 再生進捗の自動更新を開始
+        self.update_movie_progress()
+
 
     def configure_audio_player(self, path):
         """音声プレイヤーの設定を行う"""
@@ -274,6 +290,25 @@ class VUMeterApp:
             pygame.mixer.init()
             self.play_pause_button.config(text="再生")
 
+
+    def update_movie_progress(self):
+        """動画の再生進捗をスライダーと時間ラベルに反映"""
+        if self.video_player.is_active and self.video_player.playing:
+            current_ms = self.video_player.player.get_time()
+            current_sec = current_ms / 1000 if current_ms > 0 else 0
+
+            # スライダーと時間ラベルを更新
+            self.progress_slider.set(current_sec)
+            self.elapsed_time_label.config(text=self.utility.format_time(current_sec))
+
+            # 終了していたら停止処理
+            if not self.video_player.player.is_playing():
+                self.play_pause_button.config(text="再生")
+                self.video_player.playing = False
+                return
+
+        # 0.5秒ごとに呼び直す
+        self.master.after(500, self.update_movie_progress)
 
     def update_meter(self):
         if not self.playing or self.paused:
