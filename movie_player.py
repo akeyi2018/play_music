@@ -4,10 +4,9 @@ import vlc
 class VideoPlayer:
 
     def __init__(self, master):
+        """動画プレイヤーの初期化"""
         self.master = master
-        self.master.title("Video Player")
-        
-        self.video_frame = tk.Frame(master, width=640, height=360, bg="black")
+        self.video_frame = tk.Frame(self.master, width=640, height=360, bg="black")
 
         self.instance = vlc.Instance("--quiet", "--no-video-title-show")
         self.player = self.instance.media_player_new()

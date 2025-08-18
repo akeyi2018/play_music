@@ -11,6 +11,8 @@ BASS_GAIN = 1.0
 MID_GAIN = 1.0
 TREBLE_GAIN = 1.2
 
+RATE = 44100 # サンプリングレート
+
 BAR_START = 50  # 中心からバー開始位置までの距離
 
 CONTROLL_ROW_POSITION = 0  # ボタンの行位置（0から数える）
@@ -19,3 +21,5 @@ SLIDER_LABEL_ROW_POSITION = 2  # スライダーラベルの行位置（0から�
 VU_METER_ROW_POSITION = 3  # VUメーターの行位置（
 FILE_ROW_POSITION = 4  # ファイル名表示の行位置（0から数える）
 MOVIE_ROW_POSITION = 5  # 動画の行位置（0から数える
+
+UPDATE_RATE = 50 # 更新間隔（ミリ秒）
