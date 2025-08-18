@@ -4,7 +4,6 @@ import math, time, random
 class RadialRippleMeter:
     def __init__(self, master, ripple_alpha=150):
         self.canvas = tk.Canvas(master, width=400, height=400, bg="black")
-        self.canvas.grid(row=3, column=0)
         self.center = (200, 200)
         self.ripple_alpha = ripple_alpha  # 擬似透明度（0-255）
 

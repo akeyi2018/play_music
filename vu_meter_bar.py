@@ -14,7 +14,6 @@ def interpolate_color(color1, color2, factor):
 class VUMeter:
     def __init__(self, master):
         self.canvas = tk.Canvas(master, width=400, height=400, bg="black")
-        self.canvas.grid(row=3, column=0, padx=10, pady=10)
 
         self.bars = {}
         self.labels = {}

@@ -4,7 +4,6 @@ import math
 class RaderMeter:
     def __init__(self, master):
         self.canvas = tk.Canvas(master, width=400, height=400, bg="black")
-        self.canvas.grid(row=3, column=0, padx=30)
 
         self.band_names = ["BASS1","BASS2","BASS3","MID1","MID2","MID3","TREBLE1","TREBLE2"]
         self.colors = ["#0000ff","#0000ff","#ff0000","#ff0000",
