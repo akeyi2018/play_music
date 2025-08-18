@@ -104,6 +104,9 @@ class ConfigurePlayer:
 
     # ----------------- 動画プレイヤー設定 -----------------
     def configure_movie_player(self, path):
+        # VUメータを非表示にし、動画プレイヤーを設定
+        self.meter_manager.hide_all_meters()
+
         self.video_player.load_file(path)
         self.video_player.is_active = True
         self.active_meter = None
@@ -111,12 +114,13 @@ class ConfigurePlayer:
         self.progress_slider.config(to=duration_sec)
         self.progress_slider.set(0)
         self.time_label.config(text=f"00:00 / {self.utility.format_time(duration_sec)}")
+        self.play_button.config(state=tk.NORMAL)
         self.update_movie_progress()
 
     # ----------------- 再生/一時停止 -----------------
     def toggle_play_pause(self):
         if self.mode == "video" and self.video_player.is_active:
-            self.video_player.toggle_play_pause()
+            self.video_player.play_video()
             return
         if self.samples is None:
             return

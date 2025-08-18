@@ -5,6 +5,7 @@ import tkinter as tk
 from pydub import AudioSegment
 from utility import MusicUtility    
 from settings import *
+from loguru import logger
 
 class PlayerManager:
     def __init__(self, app, rader_meter, bar_meter, radial_bar_meter, radial_ripple_meter, switch_button):
@@ -28,12 +29,13 @@ class PlayerManager:
 
     # ---------------- メーター操作 ----------------
     def hide_all_meters(self):
-        self.rader_meter.canvas.grid_remove()
-        self.bar_meter.canvas.grid_remove()
-        self.radial_ripple_meter.canvas.grid_remove()
-        self.radial_bar_meter.canvas.grid_remove()
+        for meter in [self.rader_meter, self.bar_meter, self.radial_ripple_meter, self.radial_bar_meter]:
+            meter.canvas.grid_remove()  # grid ならこれ
+        self.active_meter = None
         if self.switch_button:
             self.switch_button.grid_remove()
+        self.active_meter = None
+        logger.info("All meters hidden.")
 
     def show_all_meters(self, grid_row):
         self.rader_meter.canvas.grid(row=grid_row, column=0, padx=30)
@@ -114,6 +116,9 @@ class PlayerManager:
 
     # ---------------- 動画 ----------------
     def load_movie(self, path):
+        # UVmeter を非表示
+        self.hide_all_meters()
+
         if self.audio_update_after_id:
             self.app.master.after_cancel(self.audio_update_after_id)
             self.audio_update_after_id = None

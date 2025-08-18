@@ -1,5 +1,6 @@
 import tkinter as tk
 import vlc
+from settings import *
 
 class VideoPlayer:
 
@@ -15,7 +16,6 @@ class VideoPlayer:
         self.is_active = False
         self.playing = False
         self.length_ms = 0
-        
 
     def load_file(self, filepath):
         media = self.instance.media_new(filepath)
@@ -26,6 +26,7 @@ class VideoPlayer:
 
     def play_video(self):
         self.player.play()
+        self.video_frame.grid(row=MOVIE_ROW_POSITION, column=0, padx=10, pady=10)
         self.playing = True
 
     def stop_video(self):
