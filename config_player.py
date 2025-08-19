@@ -23,7 +23,8 @@ class ConfigurePlayer:
         self.mode = "audio"
         self.user_dragging = False
 
-        self.update_movie_job = None   # ← job id 保存用
+        # afterジョブ管理 dict
+        self.update_jobs = {"music": None, "video": None}
 
         # サンプル管理
         self.samples = None
@@ -38,7 +39,6 @@ class ConfigurePlayer:
 
     # ----------------- UI -----------------
     def create_widgets(self):
-        # コントロールフレーム
         control_frame = tk.Frame(self.master)
         control_frame.grid(row=CONTROLL_ROW_POSITION, column=0, sticky="w", padx=5, pady=5)
 
@@ -76,7 +76,6 @@ class ConfigurePlayer:
             display_name = display_name[:25] + "..." + display_name[-20:]
         self.master.title(f"Playing: {display_name}")
 
-        # 動画ファイル
         if path.lower().endswith((".mp4", ".avi", ".mov")):
             self.mode = "video"
             self.switch_button.grid_forget()
@@ -85,11 +84,9 @@ class ConfigurePlayer:
             self.mode = "audio"
             self.switch_button.grid(row=0, column=3, padx=5)
             self.configure_audio_player(path)
-    
 
     # ----------------- 音声プレイヤー設定 -----------------
     def configure_audio_player(self, path):
-
         self.reset_video_player()
 
         pygame.mixer.music.load(path)
@@ -105,51 +102,33 @@ class ConfigurePlayer:
         self.progress_slider.set(0)
         self.user_dragging = False
 
-        # メータ初期化
         self.meter_manager.show_default_meter()
 
     # ----------------- 動画プレイヤー設定 -----------------
     def reset_video_player(self):
-        """動画プレイヤーをリセット"""
-
-        # 進捗更新ループを止める
-        self.cancel_update_movie_progress()
-
-        # 動画停止
+        self.cancel_update("video")
         self.video_player.reset()
         self.video_player.is_active = False
         self.video_player.playing = False
-
-        # スライダーなどUI初期化
         self.progress_slider.config(to=0)
         self.time_label.config(text="00:00 / 00:00")
         self.play_button.config(state=tk.DISABLED)
-
-        # VUメータは消しておく（ここポイント）
         self.meter_manager.hide_all_meters()
-
         logger.info("Video player reset successfully.")
 
     def reset_audio_player(self):
-        """音声プレイヤーをリセット"""
         pygame.mixer.music.stop()
         self.samples = None
         self.index = 0
         self.progress_slider.config(to=0)
         self.time_label.config(text="00:00 / 00:00")
         self.play_button.config(state=tk.DISABLED)
-
-        # VUメータを非表示にする
         self.meter_manager.hide_all_meters()
-
         self.stop_media()
         logger.info("Audio player reset successfully.")
 
     def configure_movie_player(self, path):
-
         self.reset_audio_player()
-
-        # 動画プレイヤーにファイルをロード
         self.video_player.load_file(path)
         self.video_player.is_active = True
         self.active_meter = None
@@ -158,44 +137,117 @@ class ConfigurePlayer:
         self.progress_slider.set(0)
         self.time_label.config(text=f"00:00 / {self.utility.format_time(duration_sec)}")
         self.play_button.config(state=tk.NORMAL)
-        self.update_movie_progress()
 
-    # ----------------- 再生/一時停止 -----------------
+    # ----------------- 共通 after 管理 -----------------
+    def cancel_update(self, mode):
+        if self.update_jobs[mode]:
+            self.master.after_cancel(self.update_jobs[mode])
+            self.update_jobs[mode] = None
+
+    def schedule_update(self, mode, func, interval):
+        self.cancel_update(mode)
+
+        def wrapped():
+            cont = func()
+            if cont:
+                self.update_jobs[mode] = self.master.after(interval, wrapped)
+            else:
+                self.cancel_update(mode)
+
+        self.update_jobs[mode] = self.master.after(interval, wrapped)
+
+    # ----------------- 音楽更新 -----------------
+    def update_meter(self):
+        if not self.playing or self.paused or self.samples is None:
+            return False
+        if self.index + self.chunk_size >= len(self.samples) or not pygame.mixer.music.get_busy():
+            self.playing = False
+            self.play_button.config(text="Play")
+            return False
+
+        chunk = self.samples[self.index:self.index + self.chunk_size]
+        self.index += self.chunk_size
+
+        freqs, amp = self.utility.calculate_fft(chunk, self.rate)
+        all_bands = (
+            self.utility.multi_band_energies(freqs, amp, BASS_RANGES, BASS_GAIN) +
+            self.utility.multi_band_energies(freqs, amp, MID_RANGES, MID_GAIN) +
+            self.utility.multi_band_energies(freqs, amp, TREBLE_RANGES, TREBLE_GAIN)
+        )
+
+        self.meter_manager.update_current(all_bands)
+
+        if not self.user_dragging:
+            current_sec = self.index / self.rate
+            self.progress_slider.set(current_sec)
+            self.time_label.config(
+                text=f"{self.utility.format_time(current_sec)} / {self.utility.format_time(self.duration_seconds)}"
+            )
+
+        if UDP_IP and UDP_PORT:
+            msg = ",".join(f"{val:.2f}" for val in all_bands)
+            self.utility.send_udp_rgb_message(msg)
+
+        return True
+
+    # ----------------- 動画更新 -----------------
+    def update_movie_progress(self):
+        if self.video_player.is_active and self.video_player.playing:
+            current_sec = max(self.video_player.player.get_time() / 1000, 0)
+            self.progress_slider.set(current_sec)
+            self.time_label.config(
+                text=f"{self.utility.format_time(current_sec)} / {self.utility.format_time(self.video_player.length_ms/1000)}"
+            )
+            if not self.video_player.player.is_playing():
+                self.video_player.playing = False
+                self.play_button.config(text="Play")
+                return False
+            return True
+        return False
+
+    # ----------------- 再生 / 停止 -----------------
     def toggle_play_pause(self):
-        if self.mode == "video" and self.video_player.is_active:
-            self.video_player.play_video()
-            return
-        if self.samples is None:
-            return
+        if self.mode == "audio":
+            if not self.playing:
+                self.playing = True
+                self.paused = False
+                pygame.mixer.music.play(start=self.index / self.rate)
+                self.play_button.config(text="Pause")
+                self.schedule_update("music", self.update_meter, UPDATE_RATE)
+            elif self.paused:
+                self.paused = False
+                pygame.mixer.music.unpause()
+                self.play_button.config(text="Pause")
+                self.schedule_update("music", self.update_meter, UPDATE_RATE)
+            else:
+                self.paused = True
+                pygame.mixer.music.pause()
+                self.play_button.config(text="Play")
+                self.cancel_update("music")
+        elif self.mode == "video":
+            if not self.video_player.playing:
+                self.video_player.play_video()
+                self.play_button.config(text="Pause")
+                self.schedule_update("video", self.update_movie_progress, 500)
+            else:
+                self.video_player.pause_video()
+                self.play_button.config(text="Play")
+                self.cancel_update("video")
 
-        if not self.playing:
-            self.playing = True
-            self.paused = False
-            pygame.mixer.music.play(start=self.index / self.rate)
-            self.play_button.config(text="Pause")
-            self.update_meter()
-        elif not self.paused:
-            pygame.mixer.music.pause()
-            self.paused = True
-            self.play_button.config(text="Resume")
-        else:
-            pygame.mixer.music.unpause()
-            self.paused = False
-            self.play_button.config(text="Pause")
-            self.update_meter()
-
-    # ----------------- 停止 -----------------
     def stop_media(self):
-        if self.mode == "video" and self.video_player.is_active:
-            self.video_player.stop_video()
-        else:
+        if self.mode == "audio":
+            pygame.mixer.music.stop()
             self.playing = False
             self.paused = False
-            pygame.mixer.music.stop()
             self.index = 0
             self.progress_slider.set(0)
             self.time_label.config(text=f"00:00 / {self.utility.format_time(self.duration_seconds)}")
             self.play_button.config(text="Play")
+            self.cancel_update("music")
+        elif self.mode == "video":
+            self.video_player.stop_video()
+            self.play_button.config(text="Play")
+            self.cancel_update("video")
 
     # ----------------- スライダー操作 -----------------
     def on_slider_press(self, event):
@@ -204,79 +256,29 @@ class ConfigurePlayer:
     def on_slider_release(self, event):
         self.user_dragging = False
         pos_seconds = float(self.progress_slider.get())
-        self.index = int(pos_seconds * self.rate)
-        pygame.mixer.music.stop()
-        pygame.mixer.music.play(start=pos_seconds)
-        self.time_label.config(text=f"{self.utility.format_time(pos_seconds)} / {self.utility.format_time(self.duration_seconds)}")
-        if not self.playing:
-            self.playing = True
-            self.update_meter()
+        if self.mode == "audio":
+            self.index = int(pos_seconds * self.rate)
+            pygame.mixer.music.stop()
+            pygame.mixer.music.play(start=pos_seconds)
+            if not self.playing:
+                self.playing = True
+            self.schedule_update("music", self.update_meter, UPDATE_RATE)
+        elif self.mode == "video":
+            self.video_player.set_position(pos_seconds / (self.video_player.length_ms/1000))
+            if not self.video_player.playing:
+                self.video_player.play_video()
+            self.schedule_update("video", self.update_movie_progress, 500)
+
+        self.time_label.config(text=f"{self.utility.format_time(pos_seconds)} / "
+                                    f"{self.utility.format_time(self.duration_seconds if self.mode=='audio' else self.video_player.length_ms/1000)}")
 
     # ----------------- メータ切替 -----------------
-    # VUメータ切り替え
     def switch_meter(self):
         if self.mode != "audio":
             return
         meters = list(self.meter_manager.meters.keys())
-
-        # 現在のメータを確認して切り替え
         if self.meter_manager.current_meter not in meters:
             self.meter_manager.show_default_meter()
         else:
             idx = meters.index(self.meter_manager.current_meter)
             self.meter_manager.show_meter(meters[(idx + 1) % len(meters)])
-
-    # ----------------- 音声更新 -----------------
-    def update_meter(self):
-        if not self.playing or self.paused or self.samples is None:
-            return
-        if self.index + self.chunk_size >= len(self.samples) or not pygame.mixer.music.get_busy():
-            self.playing = False
-            self.play_button.config(text="Play")
-            return
-        
-        # チャンク取得
-        chunk = self.samples[self.index:self.index + self.chunk_size]
-        self.index += self.chunk_size
-
-        freqs, amp = self.utility.calculate_fft(chunk, self.rate)
-        bass_vals = self.utility.multi_band_energies(freqs, amp, BASS_RANGES, BASS_GAIN)
-        mid_vals = self.utility.multi_band_energies(freqs, amp, MID_RANGES, MID_GAIN)
-        treble_vals = self.utility.multi_band_energies(freqs, amp, TREBLE_RANGES, TREBLE_GAIN)
-        all_bands = bass_vals + mid_vals + treble_vals
-
-        # メータ更新
-        self.meter_manager.update_current(all_bands)
-
-        if not self.user_dragging:
-            current_sec = self.index / self.rate
-            self.progress_slider.set(current_sec)
-            self.time_label.config(
-                text=f"{self.utility.format_time(current_sec)} / {self.utility.format_time(self.duration_seconds)}")
-            
-        # UDP送信
-        if UDP_IP and UDP_PORT:
-            msg = ",".join(f"{val:.2f}" for val in all_bands)
-            self.utility.send_udp_rgb_message(msg)
-
-        self.master.after(UPDATE_RATE, self.update_meter)
-
-    # ----------------- 動画進捗更新 -----------------
-    def update_movie_progress(self):
-        if self.video_player.is_active and self.video_player.playing:
-            current_sec = self.video_player.player.get_time() / 1000 if self.video_player.player.get_time() > 0 else 0
-            self.progress_slider.set(current_sec)
-            self.time_label.config(
-                text=f"{self.utility.format_time(current_sec)} / {self.utility.format_time(self.video_player.length_ms/1000)}"
-                )
-            if not self.video_player.player.is_playing():
-                self.video_player.playing = False
-                self.play_button.config(text="Play")
-                return
-        # after の id を保存
-        self.update_movie_job = self.master.after(500, self.update_movie_progress)
-
-    def cancel_update_movie_progress(self):
-        if self.update_movie_job is not None:
-            self.master.after_cancel(self.update_movie_job)
-            self.update_movie_job = None
