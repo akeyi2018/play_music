@@ -23,6 +23,8 @@ class ConfigurePlayer:
         self.mode = "audio"
         self.user_dragging = False
 
+        self.update_movie_job = None   # ← job id 保存用
+
         # サンプル管理
         self.samples = None
         self.rate = RATE
@@ -83,9 +85,13 @@ class ConfigurePlayer:
             self.mode = "audio"
             self.switch_button.grid(row=0, column=3, padx=5)
             self.configure_audio_player(path)
+    
 
     # ----------------- 音声プレイヤー設定 -----------------
     def configure_audio_player(self, path):
+
+        self.reset_video_player()
+
         pygame.mixer.music.load(path)
         self.audio_segment = AudioSegment.from_file(path).set_channels(1).set_frame_rate(self.rate)
         self.samples = np.array(self.audio_segment.get_array_of_samples()).astype(np.float32)
@@ -103,10 +109,47 @@ class ConfigurePlayer:
         self.meter_manager.show_default_meter()
 
     # ----------------- 動画プレイヤー設定 -----------------
-    def configure_movie_player(self, path):
-        # VUメータを非表示にし、動画プレイヤーを設定
+    def reset_video_player(self):
+        """動画プレイヤーをリセット"""
+
+        # 進捗更新ループを止める
+        self.cancel_update_movie_progress()
+
+        # 動画停止
+        self.video_player.reset()
+        self.video_player.is_active = False
+        self.video_player.playing = False
+
+        # スライダーなどUI初期化
+        self.progress_slider.config(to=0)
+        self.time_label.config(text="00:00 / 00:00")
+        self.play_button.config(state=tk.DISABLED)
+
+        # VUメータは消しておく（ここポイント）
         self.meter_manager.hide_all_meters()
 
+        logger.info("Video player reset successfully.")
+
+    def reset_audio_player(self):
+        """音声プレイヤーをリセット"""
+        pygame.mixer.music.stop()
+        self.samples = None
+        self.index = 0
+        self.progress_slider.config(to=0)
+        self.time_label.config(text="00:00 / 00:00")
+        self.play_button.config(state=tk.DISABLED)
+
+        # VUメータを非表示にする
+        self.meter_manager.hide_all_meters()
+
+        self.stop_media()
+        logger.info("Audio player reset successfully.")
+
+    def configure_movie_player(self, path):
+
+        self.reset_audio_player()
+
+        # 動画プレイヤーにファイルをロード
         self.video_player.load_file(path)
         self.video_player.is_active = True
         self.active_meter = None
@@ -223,9 +266,17 @@ class ConfigurePlayer:
         if self.video_player.is_active and self.video_player.playing:
             current_sec = self.video_player.player.get_time() / 1000 if self.video_player.player.get_time() > 0 else 0
             self.progress_slider.set(current_sec)
-            self.time_label.config(text=f"{self.utility.format_time(current_sec)} / {self.utility.format_time(self.video_player.length_ms/1000)}")
+            self.time_label.config(
+                text=f"{self.utility.format_time(current_sec)} / {self.utility.format_time(self.video_player.length_ms/1000)}"
+                )
             if not self.video_player.player.is_playing():
                 self.video_player.playing = False
                 self.play_button.config(text="Play")
                 return
-        self.master.after(500, self.update_movie_progress)
+        # after の id を保存
+        self.update_movie_job = self.master.after(500, self.update_movie_progress)
+
+    def cancel_update_movie_progress(self):
+        if self.update_movie_job is not None:
+            self.master.after_cancel(self.update_movie_job)
+            self.update_movie_job = None

@@ -4,6 +4,7 @@ from .meter_bar import MeterBar
 from .meter_rader import MeterRader
 from .meter_ripple import MeterRipple
 from .meter_taiji import MeterTaiji
+from loguru import logger
 
 class MeterManager:
     def __init__(self, master, grid_row=1, grid_column=0):
@@ -43,6 +44,7 @@ class MeterManager:
             if hasattr(meter, 'canvas'):
                 meter.canvas.grid_forget()
         self.current_meter = None
+        logger.info("All meters hidden.")
 
     def show_default_meter(self):
         """デフォルトでバー表示"""

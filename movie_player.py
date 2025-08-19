@@ -1,6 +1,7 @@
 import tkinter as tk
 import vlc
 from settings import *
+from loguru import logger
 
 class VideoPlayer:
 
@@ -18,6 +19,10 @@ class VideoPlayer:
         self.length_ms = 0
 
     def load_file(self, filepath):
+
+        # 毎回新しいプレイヤー作る
+        self.player = self.instance.media_player_new()
+
         media = self.instance.media_new(filepath)
         media.parse()
         self.length_ms = media.get_duration()
@@ -30,8 +35,20 @@ class VideoPlayer:
         self.playing = True
 
     def stop_video(self):
-        self.player.stop()
+        if self.player.is_playing():
+            self.player.stop()
+        self.player.release()  # ← 完全解放
+        self.player = self.instance.media_player_new()  # 再利用できるように再生成
         self.playing = False
+
+    def reset(self):
+        """動画プレイヤーをリセット"""
+        self.stop_video()
+
+        self.is_active = False
+        self.length_ms = 0
+        self.video_frame.grid_remove()
+        # logger.info("Video player reset successfully.")
 
     def pause_video(self):
         if self.playing:
