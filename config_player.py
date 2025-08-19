@@ -252,6 +252,8 @@ class ConfigurePlayer:
     # ----------------- スライダー操作 -----------------
     def on_slider_press(self, event):
         self.user_dragging = True
+        if self.mode == "video":
+            self.cancel_update("video")
 
     def on_slider_release(self, event):
         self.user_dragging = False
@@ -264,9 +266,15 @@ class ConfigurePlayer:
                 self.playing = True
             self.schedule_update("music", self.update_meter, UPDATE_RATE)
         elif self.mode == "video":
-            self.video_player.set_position(pos_seconds / (self.video_player.length_ms/1000))
+            # 秒 → ミリ秒に変換して VLC に反映
+            new_time_ms = int(pos_seconds * 1000)
+            self.video_player.player.set_time(new_time_ms)
+
+            # 停止状態だったら再生再開
             if not self.video_player.playing:
                 self.video_player.play_video()
+
+            # 再度 update loop を開始
             self.schedule_update("video", self.update_movie_progress, 500)
 
         self.time_label.config(text=f"{self.utility.format_time(pos_seconds)} / "
