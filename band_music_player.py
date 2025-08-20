@@ -11,7 +11,7 @@ class VUMeterApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Band Music Player")
-        self.master.geometry("800x600")
+        self.master.geometry("1400x900")
 
         # ログ設定
         logger.add("band_music_player.log", rotation="1 MB", level="DEBUG")

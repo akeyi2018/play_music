@@ -20,7 +20,7 @@ class ConfigurePlayer:
         self.playing = False
         self.paused = False
         self.current_file = None
-        self.mode = "audio"
+        self.mode = self.utility.get_format()  # 'audio' or 'video'
         self.user_dragging = False
 
         # afterジョブ管理 dict
@@ -35,6 +35,8 @@ class ConfigurePlayer:
 
         # UI設定
         self.font = ("Arial", 12)
+        self.video_size_sw = 0
+
         self.create_widgets()
 
     # ----------------- UI -----------------
@@ -51,6 +53,15 @@ class ConfigurePlayer:
         self.stop_button.grid(row=0, column=2, padx=5)
         self.switch_button = tk.Button(control_frame, text="VU SW", font=self.font, command=self.switch_meter)
 
+        # ビデオプレイヤーのフレームサイズボタン
+        self.video_frame_button = tk.Button(control_frame, text="Video Frame Size", font=self.font,
+                                            command=self.set_video_frame_size)
+        self.video_frame_button.grid(row=0, column=4, padx=5)
+
+        # ビデオサイズフレームサイズラベル
+        self.video_size_label = tk.Label(control_frame, text=f"Video Size: 640x360", font=self.font)
+        self.video_size_label.grid(row=0, column=5, padx=5)
+
         # スライダー
         self.progress_slider = tk.Scale(self.master, from_=0, to=100, orient="horizontal",
                                         showvalue=False, length=300)
@@ -65,7 +76,7 @@ class ConfigurePlayer:
     # ----------------- ファイルロード -----------------
     def load_file(self):
         path = filedialog.askopenfilename(
-            filetypes=[("Media files", "*.mp3 *.wav *.ogg *.flac *.mp4 *.avi *.mov"), ("All files", "*.*")]
+            filetypes=[("Media files", "*.mp3 *.wav *.ogg *.webm *.mp4 *.avi *.mov"), ("All files", "*.*")]
         )
         if not path:
             return
@@ -76,7 +87,7 @@ class ConfigurePlayer:
             display_name = display_name[:25] + "..." + display_name[-20:]
         self.master.title(f"Playing: {display_name}")
 
-        if path.lower().endswith((".mp4", ".avi", ".mov")):
+        if path.lower().endswith((".mp4", ".avi", ".mov",".webm",".mkv")):
             self.mode = "video"
             self.switch_button.grid_forget()
             self.configure_movie_player(path)
@@ -84,6 +95,16 @@ class ConfigurePlayer:
             self.mode = "audio"
             self.switch_button.grid(row=0, column=3, padx=5)
             self.configure_audio_player(path)
+
+    # ----------------- ビデオフレームサイズ設定 -----------------
+    def set_video_frame_size(self):
+        if self.video_size_sw == 0:
+            self.video_size_sw = 1
+            self.video_size_label.config(text="Video Size: 1280x720")
+        elif self.video_size_sw == 1:
+            self.video_size_sw = 0
+            self.video_size_label.config(text="Video Size: 640x360")
+
 
     # ----------------- 音声プレイヤー設定 -----------------
     def configure_audio_player(self, path):
@@ -129,7 +150,7 @@ class ConfigurePlayer:
 
     def configure_movie_player(self, path):
         self.reset_audio_player()
-        self.video_player.load_file(path)
+        self.video_player.load_file(path, self.video_size_sw)
         self.video_player.is_active = True
         self.active_meter = None
         duration_sec = self.video_player.length_ms / 1000 if self.video_player.length_ms > 0 else 0

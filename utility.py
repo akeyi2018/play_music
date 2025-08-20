@@ -1,11 +1,18 @@
 import numpy as np
 import socket
+import json
 from settings import *
 
 class MusicUtility:
 
     def __init__(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
+    def get_format(self):
+        """設定ファイルからデフォルトのフォーマットを取得"""
+        with open('settings.json', mode='r', encoding='utf-8') as json_file:
+            settings = json.load(json_file)
+        return settings.get('default_format', 'video')
 
     def send_udp_rgb_message(self, msg: str):
         try:
