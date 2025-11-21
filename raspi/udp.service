@@ -1,0 +1,16 @@
+[Unit]
+Description=JOB
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/MatplotlibForFlask
+Environment="PYTHONPATH=/home/pi/.local/lib/python3.9/site-packages"
+ExecStart=/usr/bin/python3 /home/pi/MatplotlibForFlask/run_udp.py
+
+# 標準出力と標準エラー出力をファイルにリダイレクトする
+# StandardOutput=file:/home/pi/MatplotlibForFlask/uwsgi_stdout.log
+# StandardError=file:/home/pi/MatplotlibForFlask/uwsgi_stderr.log
+
+[Install]
+WantedBy=multi-user.target
